@@ -1,5 +1,6 @@
 import torch
 import torchvision
+import torchvision.transforms as T
 import torch.nn as nn
 from torch.nn.modules.loss import BCEWithLogitsLoss
 # from torch.optim import lr_scheduler
@@ -20,16 +21,40 @@ def main():
 
     # transformations (Torch EfficientNet will automatically do [0.0-1.0] rescaling and normalization), check
     # https://pytorch.org/vision/0.14/models/generated/torchvision.models.efficientnet_b4.html#torchvision.models.efficientnet_b4
-    transforms = torchvision.transforms.Compose([torchvision.transforms.Resize((224, 224)),
-                                                 torchvision.transforms.ToTensor(),
-                                                 torchvision.transforms.Normalize(
-                                                     mean=[0.485, 0.456, 0.406],
-                                                     std=[0.229, 0.224, 0.225],
-                                                 ),
-                                                 ])
+    train_transforms = T.Compose(
+        [
+            T.RandomHorizontalFlip(),
+            T.RandomVerticalFlip(),
+            T.ColorJitter(brightness=.5, hue=.3),
+            # T.RandomPerspective(),
+            T.RandomRotation(degrees=(0, 40)),
+            T.RandomAffine(degrees=0, translate=(0.2, 0.2)), # shift
+            T.RandomAffine(degrees=0, shear=(0.2, 0.2)), # shear
+            T.RandomAdjustSharpness(sharpness_factor=2),
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
+        ]
+    )
+
+    test_transforms = T.Compose(
+        [
+            T.RandomVerticalFlip(),
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
+        ]
+    )
+                                                 
     # datasets
-    train_data = torchvision.datasets.ImageFolder(train_dir, transform=transforms)
-    test_data = torchvision.datasets.ImageFolder(test_dir, transform=transforms)
+    train_data = torchvision.datasets.ImageFolder(train_dir, transform=train_transforms)
+    test_data = torchvision.datasets.ImageFolder(test_dir, transform=test_transforms)
     # dataloader
     train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=16)
     test_loader = torch.utils.data.DataLoader(test_data, shuffle=True, batch_size=16)
