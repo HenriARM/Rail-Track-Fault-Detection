@@ -5,11 +5,13 @@ from torch.nn.modules.loss import BCEWithLogitsLoss
 # from torch.optim import lr_scheduler
 from torchsummary import summary
 import numpy as np
-import scipy
+from scipy.ndimage import gaussian_filter1d
 import matplotlib
 
-matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def main():
@@ -35,7 +37,6 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # accepts input (B, C, H, W) or (C, H, W)
     model = torchvision.models.efficientnet_b4(weights="IMAGENET1K_V1", progress=True)
-    summary(model, (3, 224, 224))
     # freeze all params
     for params in model.parameters():
         params.requires_grad_ = False
@@ -44,6 +45,7 @@ def main():
                                      nn.Linear(in_features=model.classifier[-1].in_features,
                                                out_features=NUM_CLASSES, bias=True))
     model = model.to(device)
+    summary(model, (3, 224, 224))
     loss_fn = BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.classifier.parameters())
 
@@ -83,7 +85,7 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
 
-                np_y_prim = y_prim.cpu().data.numpy()
+                np_y_prim = torch.sigmoid(y_prim).cpu().data.numpy()
                 np_y = y.cpu().data.numpy()
                 acc = np.mean((np_y == np.rint(np_y_prim)) * 1.0)
                 metrics_epoch[f'{stage}_acc'].append(acc)
@@ -96,7 +98,7 @@ def main():
                     metrics_strs.append(f'{key}: {round(value, 2)}')
 
             print(f'epoch: {epoch} {" ".join(metrics_strs)}')
-
+        print("\n")
         best_loss = min(metrics["test_loss"])
 
         # save best model
@@ -114,17 +116,19 @@ def main():
 
         plt.clf()
         plts = []
-        c = 0
-        from scipy.ndimage import gaussian_filter1d
-        for key, value in metrics.items():
-            value = gaussian_filter1d(value, sigma=2)
-            plts += plt.plot(value, f'C{c}', label=key)
-            ax = plt.twinx()
-            c += 1
+        plt.subplot(2, 1, 1)
+        plt.title("loss")
+        plts += plt.plot(metrics["train_loss"], label="train_loss")
+        plts += plt.plot(metrics["test_loss"], label="test_loss")
         plt.legend(plts, [it.get_label() for it in plts])
-        plt.show()
-        # TODO: save plots as svg
-        # TODO: separate loss and acc plots
+
+        plts = []
+        plt.subplot(2, 1, 2)
+        plt.title("acc")
+        plts += plt.plot(metrics["train_acc"], label="train_acc")
+        plts += plt.plot(metrics["test_acc"], label="test_acc")
+        plt.legend(plts, [it.get_label() for it in plts])
+        plt.savefig("train.svg")
 
     # save best model
     # (two options how to do that https://stackoverflow.com/questions/42703500/how-do-i-save-a-trained-model-in-pytorch)
@@ -134,6 +138,5 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO: plot train, valid loss
 # TODO: create eval.py which loads model, runs inference,
 #  prints statistics (confusion matrix and classification report)
