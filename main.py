@@ -2,8 +2,14 @@ import torch
 import torchvision
 import torch.nn as nn
 from torch.nn.modules.loss import BCEWithLogitsLoss
-from torch.optim import lr_scheduler
+# from torch.optim import lr_scheduler
 from torchsummary import summary
+import numpy as np
+import scipy
+import matplotlib
+
+matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 
 
 def main():
@@ -41,82 +47,93 @@ def main():
     loss_fn = BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.classifier.parameters())
 
-    losses = []
-    val_losses = []
+    metrics = {}
+    for stage in ["train", "test"]:
+        for metric in ["loss", "acc"]:
+            metrics[f"{stage}_{metric}"] = []
 
-    epoch_train_losses = []
-    epoch_test_losses = []
-
-    epochs = 10
+    epochs = 100
     early_stopping_tolerance = 3
     early_stopping_threshold = 0.03
 
     for epoch in range(epochs):
-        epoch_loss = 0
-        for i, data in enumerate(train_loader, 0):
-            x, y = data
-            x = x.to(device)
-            y = y.unsqueeze(1).float()  # convert target to same nn output shape
-            y = y.to(device)  # move to gpu
+        plt.clf()
+        for loader in [train_loader, test_loader]:
+            metrics_epoch = {key: [] for key in metrics.keys()}
+            if loader == train_loader:
+                stage = "train"
+                model = model.train()
+                torch.set_grad_enabled(True)
+            else:
+                stage = "test"
+                model = model.eval()
+                torch.set_grad_enabled(False)
 
-            # make prediction
-            yhat = model(x)
-            # enter train mode
-            model.train()
-            # compute loss
-            loss = loss_fn(yhat, y)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            # optimizer.cleargrads()
-            # TODO: / batch
-            epoch_loss += loss / len(train_loader)
-            losses.append(loss)
+            for x, y in loader:
+                x = x.to(device)
+                y = y.unsqueeze(1).float()
+                y = y.to(device)
 
-        epoch_train_losses.append(epoch_loss)
-        print('\nEpoch : {}, train loss : {}'.format(epoch + 1, epoch_loss))
+                y_prim = model.forward(x)
+                loss = loss_fn(y_prim, y)
+                metrics_epoch[f'{stage}_loss'].append(loss.cpu().item())
 
-        # validation doesnt requires gradient
-        with torch.no_grad():
-            cum_loss = 0
-            for x_batch, y_batch in test_loader:
-                x_batch = x_batch.to(device)
-                y_batch = y_batch.unsqueeze(1).float()  # convert target to same nn output shape
-                y_batch = y_batch.to(device)
+                if loader == train_loader:
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
 
-                # model to eval mode
-                model.eval()
+                np_y_prim = y_prim.cpu().data.numpy()
+                np_y = y.cpu().data.numpy()
+                acc = np.mean((np_y == np.rint(np_y_prim)) * 1.0)
+                metrics_epoch[f'{stage}_acc'].append(acc)
 
-                yhat = model(x_batch)
-                val_loss = loss_fn(yhat, y_batch)
-                cum_loss += loss / len(test_loader)
-                val_losses.append(val_loss.item())
+            metrics_strs = []
+            for key in metrics_epoch.keys():
+                if stage in key:
+                    value = np.mean(metrics_epoch[key])
+                    metrics[key].append(value)
+                    metrics_strs.append(f'{key}: {round(value, 2)}')
 
-            epoch_test_losses.append(cum_loss)
-            print('Epoch : {}, val loss : {}'.format(epoch + 1, cum_loss))
+            print(f'epoch: {epoch} {" ".join(metrics_strs)}')
 
-            best_loss = min(epoch_test_losses)
+        best_loss = min(metrics["test_loss"])
 
-            # save best model
-            if cum_loss <= best_loss:
-                best_model_wts = model.state_dict()
+        # save best model
+        if metrics["test_loss"][-1] <= best_loss:
+            best_model_wts = model  # .state_dict()
 
-            # early stopping
-            early_stopping_counter = 0
-            if cum_loss > best_loss:
-                early_stopping_counter += 1
+        # early stopping
+        early_stopping_counter = 0
+        if metrics["test_loss"][-1] > best_loss:
+            early_stopping_counter += 1
 
-            if (early_stopping_counter == early_stopping_tolerance) or (best_loss <= early_stopping_threshold):
-                print("/nTerminating: early stopping")
-                break  # terminate training
+        if (early_stopping_counter == early_stopping_tolerance) or (best_loss <= early_stopping_threshold):
+            print("/nTerminating: early stopping")
+            break  # terminate training
 
-    # load best model
-    model.load_state_dict(best_model_wts)
+        plt.clf()
+        plts = []
+        c = 0
+        from scipy.ndimage import gaussian_filter1d
+        for key, value in metrics.items():
+            value = gaussian_filter1d(value, sigma=2)
+            plts += plt.plot(value, f'C{c}', label=key)
+            ax = plt.twinx()
+            c += 1
+        plt.legend(plts, [it.get_label() for it in plts])
+        plt.show()
+        # TODO: save plots as svg
+        # TODO: separate loss and acc plots
+
+    # save best model
+    # (two options how to do that https://stackoverflow.com/questions/42703500/how-do-i-save-a-trained-model-in-pytorch)
+    torch.save(best_model_wts, "./best_model.pt")
 
 
 if __name__ == '__main__':
     main()
 
 # TODO: plot train, valid loss
-# TODO: separate eval.py which loads model, runs inference,
+# TODO: create eval.py which loads model, runs inference,
 #  prints statistics (confusion matrix and classification report)
