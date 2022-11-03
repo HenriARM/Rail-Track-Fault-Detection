@@ -61,7 +61,12 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # accepts input (B, C, H, W) or (C, H, W)
+
+    # https://pytorch.org/vision/main/models/efficientnet.html
     model = torchvision.models.efficientnet_b4(weights="IMAGENET1K_V1", progress=True)
+    
+    # https://pytorch.org/vision/main/models/efficientnetv2.html
+    # model = torchvision.models.efficientnet_v2_s(weights="IMAGENET1K_V1", progress=True)
     # freeze all params
     for params in model.parameters():
         params.requires_grad_ = False
@@ -72,7 +77,8 @@ def main():
     model = model.to(device)
     summary(model, (3, 224, 224))
     loss_fn = BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(model.classifier.parameters())
+    lr = 0.001
+    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr)
 
     metrics = {}
     for stage in ["train", "test"]:
@@ -158,6 +164,7 @@ def main():
     # save best model
     # (two options how to do that https://stackoverflow.com/questions/42703500/how-do-i-save-a-trained-model-in-pytorch)
     torch.save(best_model_wts, "./best_model.pt")
+    print(f"best loss {best_loss}")
 
 
 if __name__ == '__main__':
