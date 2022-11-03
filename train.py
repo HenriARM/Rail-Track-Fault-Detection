@@ -56,8 +56,8 @@ def main():
     train_data = torchvision.datasets.ImageFolder(train_dir, transform=train_transforms)
     test_data = torchvision.datasets.ImageFolder(test_dir, transform=test_transforms)
     # dataloader
-    train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=16)
-    test_loader = torch.utils.data.DataLoader(test_data, shuffle=True, batch_size=16)
+    train_loader = torch.utils.data.DataLoader(train_data, shuffle=True, batch_size=16, num_workers=8)
+    test_loader = torch.utils.data.DataLoader(test_data, shuffle=True, batch_size=16, num_workers=8)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # accepts input (B, C, H, W) or (C, H, W)
