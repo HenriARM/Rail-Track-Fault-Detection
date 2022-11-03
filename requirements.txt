@@ -1,0 +1,3 @@
+torch
+torchvision # > 0.11.0 fro EfficientNet
+torchsummary
