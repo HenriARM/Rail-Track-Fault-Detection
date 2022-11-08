@@ -42,7 +42,6 @@ def main():
 
     test_transforms = T.Compose(
         [
-            T.RandomVerticalFlip(),
             T.Resize((224, 224)),
             T.ToTensor(),
             T.Normalize(
@@ -68,8 +67,8 @@ def main():
     # https://pytorch.org/vision/main/models/efficientnetv2.html
     # model = torchvision.models.efficientnet_v2_s(weights="IMAGENET1K_V1", progress=True)
     # freeze all params
-    for params in model.parameters():
-        params.requires_grad_ = False
+    # for params in model.parameters():
+    #     params.requires_grad_ = False
     NUM_CLASSES = 1
     model.classifier = nn.Sequential(model.classifier[0],
                                      nn.Linear(in_features=model.classifier[-1].in_features,
@@ -77,8 +76,8 @@ def main():
     model = model.to(device)
     summary(model, (3, 224, 224))
     loss_fn = BCEWithLogitsLoss()
-    lr = 0.001
-    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr)
+    lr = 1e-3
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     metrics = {}
     for stage in ["train", "test"]:
@@ -143,6 +142,7 @@ def main():
 
         if (early_stopping_counter == early_stopping_tolerance) or (best_loss <= early_stopping_threshold):
             print("/nTerminating: early stopping")
+            torch.save(best_model_wts, "./best_model.pt")
             break  # terminate training
 
         plt.clf()

@@ -32,4 +32,4 @@ Data structure should look like this
 
 # Project structure:
 * `train.py` - train Backbone for Binary Classification
-* `main.py` - run on test data saved model
+* `eval.py` - run on test data saved model
